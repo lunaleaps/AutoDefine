@@ -21,7 +21,7 @@ from http.client import RemoteDisconnected
 from urllib.error import URLError
 from xml.etree import ElementTree as ET
 
-from .utils import fetch, InvalidAPIKeyError, ResultsNotFoundError
+from .utils import fetch, create_api, InvalidAPIKeyError, ResultsNotFoundError
 from .libs import webbrowser
 
 # --------------------------------- SETTINGS ---------------------------------
@@ -150,10 +150,8 @@ def _focus_zero_field(editor):
 
 
 def get_preferred_valid_entries(editor, word):
-    collegiate_url = "http://www.dictionaryapi.com/api/v1/references/collegiate/xml/" + \
-                     urllib.parse.quote_plus(word) + "?key=" + MERRIAM_WEBSTER_API_KEY
-    medical_url = "https://www.dictionaryapi.com/api/references/medical/v2/xml/" + \
-                  urllib.parse.quote_plus(word) + "?key=" + MERRIAM_WEBSTER_MEDICAL_API_KEY
+    collegiate_url = create_api(word, MERRIAM_WEBSTER_API_KEY, is_collegiate=True)
+    medical_url = create_api(word, MERRIAM_WEBSTER_MEDICAL_API_KEY, is_collegiate=False)
     all_collegiate_entries = get_entries_from_api(word, collegiate_url)
     all_medical_entries = get_entries_from_api(word, medical_url)
 
