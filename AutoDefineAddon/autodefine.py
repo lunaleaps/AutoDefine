@@ -21,6 +21,7 @@ from http.client import RemoteDisconnected
 from urllib.error import URLError
 from xml.etree import ElementTree as ET
 
+from .utils import fetch, InvalidAPIKeyError, ResultsNotFoundError
 from .libs import webbrowser
 
 # --------------------------------- SETTINGS ---------------------------------
@@ -207,19 +208,15 @@ def get_entries_from_api(word, url):
     if "YOUR_KEY_HERE" in url:
         return []
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:62.0)'
-                                                                 ' Gecko/20100101 Firefox/62.0'})
-        returned = urllib.request.urlopen(req).read()
-        if "Invalid API key" in returned.decode("UTF-8"):
-            showInfo("API key '%s' is invalid. Please double-check you are using the key labeled \"Key (Dictionary)\". "
-                     "A web browser with the web page that lists your keys will open." % url.split("?key=")[1])
-            webbrowser.open("https://www.dictionaryapi.com/account/my-keys.htm")
-            return []
-        if "Results not found" in returned.decode("UTF-8"):
-            return []
-        etree = ET.fromstring(returned)
+        response = fetch(url)
+        etree = ET.fromstring(response)
         return etree.findall("entry")
-    except URLError:
+    except InvalidAPIKeyError:
+        showInfo("API key '%s' is invalid. Please double-check you are using the key labeled \"Key (Dictionary)\". "
+                 "A web browser with the web page that lists your keys will open." % url.split("?key=")[1])
+        webbrowser.open("https://www.dictionaryapi.com/account/my-keys.htm")
+        return []
+    except (ResultsNotFoundError, URLError):
         return []
     except (ET.ParseError, RemoteDisconnected):
         showInfo("Couldn't parse API response for word '%s'. "
