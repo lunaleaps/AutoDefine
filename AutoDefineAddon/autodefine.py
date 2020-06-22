@@ -21,8 +21,10 @@ from http.client import RemoteDisconnected
 from urllib.error import URLError
 from xml.etree import ElementTree as ET
 
-from .utils import fetch, create_api, InvalidAPIKeyError, ResultsNotFoundError
+from .utils import fetch, create_api, InvalidAPIKeyError, ResultsNotFoundError, ParseError
 from .libs import webbrowser
+from .xml_api import xml_entries
+from .json_api import json_entries, valid_entries, wav_audio_link_for_entry, phonetic_transcription
 
 # --------------------------------- SETTINGS ---------------------------------
 
@@ -176,6 +178,8 @@ def get_preferred_valid_entries(editor, word):
         _focus_zero_field(editor)
     return entries.valid
 
+# looks to see if capitalized and matches id
+
 
 def filter_entries_lower_and_potential(word, all_entries):
     valid_entries = extract_valid_entries(word, all_entries)
@@ -202,13 +206,15 @@ def extract_valid_entries(word, all_entries, lower=False):
     return valid_entries
 
 
-def get_entries_from_api(word, url):
+def get_entries_from_api(word, url, is_json=False):
     if "YOUR_KEY_HERE" in url:
         return []
     try:
         response = fetch(url)
-        etree = ET.fromstring(response)
-        return etree.findall("entry")
+        if is_json:
+            return json_entries(response)
+        else:
+            return xml_entries(response)
     except InvalidAPIKeyError:
         showInfo("API key '%s' is invalid. Please double-check you are using the key labeled \"Key (Dictionary)\". "
                  "A web browser with the web page that lists your keys will open." % url.split("?key=")[1])
@@ -216,12 +222,13 @@ def get_entries_from_api(word, url):
         return []
     except (ResultsNotFoundError, URLError):
         return []
-    except (ET.ParseError, RemoteDisconnected):
+    except (ParseError, RemoteDisconnected):
         showInfo("Couldn't parse API response for word '%s'. "
                  "Please submit an issue to the AutoDefine GitHub (a web browser window will open)." % word)
         webbrowser.open("https://github.com/z1lc/AutoDefine/issues/new?title=Parse error for word '%s'"
                         "&body=Anki Version: %s%%0APlatform: %s %s%%0AURL: %s%%0AStack Trace: %s"
                         % (word, version, platform.system(), platform.release(), url, traceback.format_exc()), 0, False)
+        return []
 
 
 def _get_word(editor):
@@ -242,12 +249,74 @@ def _get_word(editor):
 def _get_definition(editor,
                     force_pronounce=False,
                     force_definition=False,
-                    force_phonetic_transcription=False):
+                    force_phonetic_transcription=False, is_json=False):
     validate_settings()
     word = _get_word(editor)
     if word == "":
         tooltip("AutoDefine: No text found in note fields.")
         return
+
+    if is_json:
+        _get_definition_json(word, editor, force_pronounce, force_definition, force_phonetic_transcription)
+    else:
+        _get_definition_xml(word, editor, force_pronounce, force_definition, force_phonetic_transcription)
+
+
+def _get_definition_json(word,
+                         editor,
+                         force_pronounce=False,
+                         force_definition=False,
+                         force_phonetic_transcription=False, is_json=False):
+
+    collegiate_url = create_api(word, MERRIAM_WEBSTER_API_KEY, is_collegiate=True, is_json=True)
+    collegiate_entries = get_entries_from_api(word, collegiate_url, is_json=True)
+    entries = valid_entries(collegiate_entries)
+
+    insert_queue = {}
+
+    # Audio Links
+    audio_links = []
+    for entry in entries:
+        audio_link = wav_audio_link_for_entry(entry)
+        if audio_link is not None:
+            audio_links.append(audio_link)
+
+    final_pronounce_index = PRONUNCIATION_FIELD
+    fields = mw.col.models.fieldNames(editor.note.model())
+    for field in fields:
+        if '🔊' in field:
+            final_pronounce_index = fields.index(field)
+            break
+
+    to_print = ''.join(audio_links)
+
+    _add_to_insert_queue(insert_queue, to_print, final_pronounce_index)
+
+    # Add Phonetic Transcription
+    if (not force_definition and not force_pronounce and PHONETIC_TRANSCRIPTION_FIELD > -1) or \
+            force_phonetic_transcription:
+
+        # extract phonetic transcriptions for each entry and label them by part of speech
+        all_transcriptions = []
+        for entry in entries:
+            transcription = phonetic_transcription(entry)
+            if transcription is not None:
+                all_transcriptions.append(transcription)
+
+        to_print = "<br>".join(all_transcriptions)
+
+        _add_to_insert_queue(insert_queue, to_print, PHONETIC_TRANSCRIPTION_FIELD)
+
+    # Add Definition
+     definition_array = []
+    
+
+def _get_definition_xml(word,
+                        editor,
+                        force_pronounce=False,
+                        force_definition=False,
+                        force_phonetic_transcription=False, is_json=False):
+
     valid_entries = get_preferred_valid_entries(editor, word)
 
     insert_queue = {}
