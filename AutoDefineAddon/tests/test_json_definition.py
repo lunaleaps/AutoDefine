@@ -1,5 +1,5 @@
 import unittest
-from json_api import get_definitions
+from json_api import get_definitions_array, handle_formatting
 
 TEST_DEF = {"def": [
             {
@@ -165,10 +165,32 @@ TEST_DEF = {"def": [
 class TestJsonAPI(unittest.TestCase):
 
     def test_get_definitions(self):
-        dts = get_definitions(TEST_DEF)
-        print(len(list(dts)))
-        # for dt in dts:
-        #     print(dt)
+        dts = get_definitions_array(TEST_DEF)
+        self.assertEqual(len(dts), 12)
+
+    def test_paired_formatting_single(self):
+        single_bold = '{bc}an ion NH{b}4{\/b}+'
+
+        def_str = handle_formatting(single_bold)
+        self.assertEqual(def_str, ': an ion NH<b>4</b>+')
+
+    def test_paired_formatting_double(self):
+        double_bold = '{bc}an ion NH{b}4{\/b}{b}+{\/b}'
+
+        def_str = handle_formatting(double_bold)
+        self.assertEqual(def_str, ': an ion NH<b>4</b><b>+</b>')
+
+    def test_multiple_paired_formatting(self):
+        original = '{inf}an{\/inf} ion NH{b}4{\/b}{sup}+{\/sup}'
+
+        def_str = handle_formatting(original)
+        self.assertEqual(def_str, '<sub>an</sub> ion NH<b>4</b><sup>+</sup>')
+
+    def test_nested_formatting(self):
+        original = '{inf}{b}an{\/b}{\/inf} ion NH{b}4{\/b}{sup}+{\/sup}'
+
+        def_str = handle_formatting(original)
+        self.assertEqual(def_str, '<sub><b>an</b></sub> ion NH<b>4</b><sup>+</sup>')
 
 
 if __name__ == '__main__':

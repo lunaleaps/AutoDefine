@@ -1,5 +1,6 @@
 import json
 from itertools import chain
+import re
 
 
 WAV_AUDIO_LINK = "https://media.merriam-webster.com/audio/prons/en/us/wav/{subdir}/{audio}.wave"
@@ -55,14 +56,14 @@ def get_functional_label(entry):
 DEFINITION_KEY = 'dt'
 
 
-def get_definitions(value):
+def get_definitions_array(value):
     if value is None or (isinstance(value, dict) is False and isinstance(value, list) is False):
         return []
 
     if isinstance(value, list):
         dt = []
         for item in value:
-            dt.extend(get_definitions(item))
+            dt.extend(get_definitions_array(item))
         return dt
     if isinstance(value, dict):
         dt = []
@@ -72,15 +73,22 @@ def get_definitions(value):
         rest = []
         for (_key, _value) in value.items():
             if _key != DEFINITION_KEY:
-                rest.extend(get_definitions(_value))
+                rest.extend(get_definitions_array(_value))
         return dt + rest
 
 
-# def join_all_definitions(entry):
-#     entry_defs = entry['def']
-#     all_dts = []
-#     get_key('dt', entry, all_dts)
-#     for entry_def in entry_defs:
+def get_definition(entry):
+    entry_def = entry['def']
+    definitions = get_definitions_array(entry_def)
+    definition = '\n'.join(definitions)
+    definition = handle_formatting(definition)
+    # definition = handle_cross_ref(definition)
+    return definition
 
-#         # regex for {dx}.. {\dx}
-#         # get all dts and then concatenate them together, remove {sx}, {dx}?
+
+def handle_formatting(definition_str):
+    def_str = re.sub(r'\{b\}([^{]+)\{\\\/b\}', r'<b>\1</b>', definition_str)
+    def_str = re.sub(r'\{sup\}([^{]+)\{\\\/sup\}', r'<sup>\1</sup>', def_str)
+    def_str = re.sub(r'\{inf\}([^{]+)\{\\\/inf\}', r'<sub>\1</sub>', def_str)
+    def_str = def_str.replace('{bc}', ': ')
+    return def_str
